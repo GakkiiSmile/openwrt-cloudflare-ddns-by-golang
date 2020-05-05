@@ -14,7 +14,7 @@ authEmail authKey 字段在 [https://dash.cloudflare.com/profile/api-tokens](clo
 
 domainName 字段为在 cloudflare 下的二级域名
 
-ddns 下的 isCurrent 为 true，指用当前主机 DDNS; 为 false 则在网络邻居中查找 mac 地址对应的 ipv6 DDNS
+ddns 下的 isCurrent 为 true，指用当前主机 DDNS; 为 false 则在网络邻居中查找 mac地址对应的ipv6 DDNS
 
 ```json
 {
