@@ -1,0 +1,17 @@
+{
+    "authEmail": "",
+    "authKey": "",
+    "domainName": "pjunjie.cc",
+    "ddns": [
+        {
+            "host": "router.pjunjie.cc",
+            "isCurrent": true,
+            "mac": null
+        },
+        {
+            "host": "test.pjunjie.cc",
+            "isCurrent": false,
+            "mac": "dd:ee:ff:aa:bb:cc"
+        }
+    ]
+}
