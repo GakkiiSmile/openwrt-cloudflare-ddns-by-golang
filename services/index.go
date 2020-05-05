@@ -30,6 +30,14 @@ type Ipv6NeighborInfo struct {
 	Status string
 }
 
+// Ipv6Neighbor里status的枚举类型
+const (
+	STALE     = "STALE"
+	REACHABLE = "REACHABLE"
+	DELAY     = "DELAY"
+	FAILED    = "FAILED"
+)
+
 // GetIpv6NeighborList Openwrt 获取ipv6的网络邻居地址信息 一般邻居都是分配ipv6 不考虑ipv4情况
 // 一般解析格式为 2409:8a55:xxxx:xxxx::1 dev br-lan lladdr 34:08:bc:xx:xx:xx STALE
 func GetIpv6NeighborList() ([]Ipv6NeighborInfo, error) {
@@ -51,7 +59,8 @@ func GetIpv6NeighborList() ([]Ipv6NeighborInfo, error) {
 		mac := ""
 		status := ipInfo[len(ipInfo)-1]
 
-		if status == "STALE" {
+		// 如果状态是错误，则丢弃
+		if status != FAILED {
 			mac = ipInfo[len(ipInfo)-2]
 		}
 
