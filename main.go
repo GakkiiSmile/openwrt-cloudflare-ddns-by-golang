@@ -1,10 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"main/model"
 	"main/services"
 	"main/services/api"
+	"os"
 	"strings"
 )
 
@@ -54,6 +57,8 @@ func deleteHostInCloudFlare(config *model.Config, recordlist []model.DNSRecord, 
 }
 
 func createDDNS(config *model.Config, ips services.IPs, zoneID string, ipv6NeighborList []services.Ipv6NeighborInfo) {
+	tmp := &tmpJSON{}
+
 	for _, dns := range config.Ddns {
 		host := dns.Host
 		mac := dns.Mac
@@ -69,6 +74,11 @@ func createDDNS(config *model.Config, ips services.IPs, zoneID string, ipv6Neigh
 					continue
 				}
 
+				tmp.Ddns = append(tmp.Ddns, tmpDDNS{
+					Host: host,
+					IP:   ips.IPv4[0],
+				})
+
 				fmt.Printf("创建成功, %#v", result)
 			} else if len(ips.IPv6) != 0 {
 				fmt.Printf("length for ipv6 :%v , %v \n\n", len(ips.IPv6), ips.IPv6)
@@ -79,6 +89,11 @@ func createDDNS(config *model.Config, ips services.IPs, zoneID string, ipv6Neigh
 					fmt.Printf("创建失败 %s", err)
 					continue
 				}
+
+				tmp.Ddns = append(tmp.Ddns, tmpDDNS{
+					Host: host,
+					IP:   ips.IPv6[0],
+				})
 
 				fmt.Printf("创建成功, %#v", result)
 			}
@@ -102,11 +117,101 @@ func createDDNS(config *model.Config, ips services.IPs, zoneID string, ipv6Neigh
 					continue
 				}
 
+				tmp.Ddns = append(tmp.Ddns, tmpDDNS{
+					Host: dns.Host,
+					IP:   ipv6NeighborList[findMacIndex].Addr,
+				})
+
 				fmt.Printf("创建成功, %#v", result)
 
 			}
 
 		}
+	}
+
+	saveTmpFile(tmp)
+}
+
+type tmpDDNS struct {
+	Host string `json:"host"`
+	IP   string `json:"ip"`
+}
+
+// 临时文件结构体
+type tmpJSON struct {
+	Ddns []tmpDDNS `json:"ddns"`
+}
+
+func readTempFile() (jsonData *tmpJSON, err error) {
+	fileObj, err := os.OpenFile("./cloudflare.ddns.tmp.json", os.O_CREATE|os.O_RDWR, 0x644)
+
+	if err != nil {
+		fmt.Println("文件读取失败", err)
+		return jsonData, err
+	}
+	defer fileObj.Close()
+
+	file, err := ioutil.ReadAll(fileObj)
+
+	if err != nil {
+		fmt.Println("文件读取失败", err)
+		return
+	}
+
+	jsonData = &tmpJSON{}
+
+	err = json.Unmarshal(file, jsonData)
+
+	if err != nil {
+		fmt.Println("临时文件json解析失败", err)
+		return jsonData, err
+	}
+
+	return jsonData, err
+}
+
+// 判断是否有相同的记录
+func hasSameRecordInTempFile(oldData *tmpJSON, recordlist []model.DNSRecord) bool {
+	if len(oldData.Ddns) > 0 {
+
+		findIndex := findInSlice(len(oldData.Ddns), func(i int) bool {
+
+			findIndex := findInSlice(len(recordlist), func(j int) bool {
+				if recordlist[j].Name == oldData.Ddns[i].Host && recordlist[j].Content == oldData.Ddns[i].IP {
+					return true
+				}
+
+				return false
+			})
+
+			if findIndex != -1 {
+				return true
+			}
+
+			return false
+
+		})
+
+		// 如果能找到一个一样的，则数据没有变化，直接退出
+		if findIndex != -1 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func saveTmpFile(tmp *tmpJSON) {
+	data, err := json.Marshal(tmp)
+
+	if err != nil {
+		return
+	}
+
+	err = ioutil.WriteFile("./cloudflare.ddns.tmp.json", data, 0x644)
+
+	if err != nil {
+		return
 	}
 }
 
@@ -158,15 +263,14 @@ func task() {
 
 	hosts := config.GetConfigAllHost()
 
-	// 先删除包含在内的域名
-	deleteHostInCloudFlare(config, recordlist, hosts)
-
+	// 读取本地ip
 	ips, err := services.GetCurrentIPs()
 
 	if err != nil {
 		fmt.Println(err)
 	}
 
+	// 读取邻居ip
 	ipv6NeighborList, err := services.GetIpv6NeighborList()
 
 	if err != nil {
@@ -174,6 +278,23 @@ func task() {
 	}
 
 	fmt.Println(ipv6NeighborList)
+
+	// 先判断当前dns是否已经发生变化，发生变化再继续往下执行替换
+	oldData, err := readTempFile()
+
+	if err != nil {
+		fmt.Println("读取临时文件出错")
+		return
+	}
+
+	// 如果临时文件，没有数据记录，则直接往下执行，有数据则对比 clouflare 的数据
+	hasSame := hasSameRecordInTempFile(oldData, recordlist)
+	if hasSame {
+		return
+	}
+
+	// 先删除包含在内的域名
+	deleteHostInCloudFlare(config, recordlist, hosts)
 
 	createDDNS(config, ips, zoneID, ipv6NeighborList)
 
