@@ -8,8 +8,12 @@ import (
 	"main/services"
 	"main/services/api"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 )
+
+var currentPwd, _ = filepath.Abs(filepath.Dir(os.Args[0]))
 
 // 在切片中查找元素
 func findInSlice(length int, f func(i int) bool) int {
@@ -143,7 +147,8 @@ type tmpJSON struct {
 }
 
 func readTempFile() (jsonData *tmpJSON, err error) {
-	fileObj, err := os.OpenFile("./cloudflare.ddns.tmp.json", os.O_CREATE|os.O_RDWR, 0x644)
+	tmpFilePath := path.Join(currentPwd, "./cloudflare.ddns.tmp.json")
+	fileObj, err := os.OpenFile(tmpFilePath, os.O_CREATE|os.O_RDWR, 0x644)
 
 	if err != nil {
 		fmt.Println("文件读取失败", err)
@@ -210,7 +215,8 @@ func saveTmpFile(tmp *tmpJSON) {
 		return
 	}
 
-	err = ioutil.WriteFile("./cloudflare.ddns.tmp.json", data, 0x644)
+	tmpFilePath := path.Join(currentPwd, "./cloudflare.ddns.tmp.json")
+	err = ioutil.WriteFile(tmpFilePath, data, 0x644)
 
 	if err != nil {
 		return
@@ -220,8 +226,9 @@ func saveTmpFile(tmp *tmpJSON) {
 }
 
 func task() {
+	configFilePath := path.Join(currentPwd, "./config.json")
 
-	config, err := services.LoadConfig("./config.json")
+	config, err := services.LoadConfig(configFilePath)
 
 	if err != nil {
 		fmt.Println(err)
