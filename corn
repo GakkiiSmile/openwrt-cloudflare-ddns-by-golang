@@ -1,0 +1,1 @@
+0 */5 * * * /mnt/sda1/ddns/main > /mnt/sda1/ddns/log
