@@ -160,11 +160,13 @@ func readTempFile() (jsonData *tmpJSON, err error) {
 
 	jsonData = &tmpJSON{}
 
-	err = json.Unmarshal(file, jsonData)
+	if string(file) != "" {
+		err = json.Unmarshal(file, jsonData)
 
-	if err != nil {
-		fmt.Println("临时文件json解析失败", err)
-		return jsonData, err
+		if err != nil {
+			fmt.Println("临时文件json解析失败", err)
+			return jsonData, err
+		}
 	}
 
 	return jsonData, err
@@ -213,6 +215,8 @@ func saveTmpFile(tmp *tmpJSON) {
 	if err != nil {
 		return
 	}
+
+	fmt.Println("历史ddns记录已保存", err)
 }
 
 func task() {

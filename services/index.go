@@ -52,23 +52,24 @@ func GetIpv6NeighborList() ([]Ipv6NeighborInfo, error) {
 	ipv6Infos := make([]Ipv6NeighborInfo, 0, len(lines))
 
 	for _, line := range lines {
+		if strings.Trim(line, " ") != "" {
+			ipInfo := strings.Split(line, " ")
 
-		ipInfo := strings.Split(line, " ")
+			addr := ipInfo[0]
+			mac := ""
+			status := ipInfo[len(ipInfo)-1]
 
-		addr := ipInfo[0]
-		mac := ""
-		status := ipInfo[len(ipInfo)-1]
+			// 如果状态是错误，则丢弃
+			if status != FAILED {
+				mac = ipInfo[len(ipInfo)-2]
+			}
 
-		// 如果状态是错误，则丢弃
-		if status != FAILED {
-			mac = ipInfo[len(ipInfo)-2]
+			ipv6Infos = append(ipv6Infos, Ipv6NeighborInfo{
+				Addr:   addr,
+				Mac:    mac,
+				Status: status,
+			})
 		}
-
-		ipv6Infos = append(ipv6Infos, Ipv6NeighborInfo{
-			Addr:   addr,
-			Mac:    mac,
-			Status: status,
-		})
 	}
 
 	return ipv6Infos, nil
