@@ -177,29 +177,49 @@ func readTempFile() (jsonData *tmpJSON, err error) {
 	return jsonData, err
 }
 
-// 判断是否有相同的记录
-func hasSameRecordInTempFile(oldData *tmpJSON, recordlist []model.DNSRecord) bool {
+// 判断是否有记录发生改变
+func hasChangedRecordInTempFile(oldData *tmpJSON, config *model.Config, ips services.IPs, ipv6NeighborInfo []services.Ipv6NeighborInfo) bool {
 	if len(oldData.Ddns) > 0 {
 
-		findIndex := findInSlice(len(oldData.Ddns), func(i int) bool {
+		findIndex := findInSlice(len(config.Ddns), func(i int) bool {
+			if config.Ddns[i].IsCurrent {
+				ip := ""
+				if len(ips.IPv4) != 0 {
+					ip = ips.IPv4[0]
+				} else if len(ips.IPv6) != 0 {
 
-			findIndex := findInSlice(len(recordlist), func(j int) bool {
-				if recordlist[j].Name == oldData.Ddns[i].Host && recordlist[j].Content == oldData.Ddns[i].IP {
-					return true
+					ip = ips.IPv6[0]
 				}
 
-				return false
-			})
+				hasChanged := findInSlice(len(oldData.Ddns), func(j int) bool {
+					return oldData.Ddns[j].Host == config.Ddns[i].Host && oldData.Ddns[j].IP != ip
+				}) != -1
 
-			if findIndex != -1 {
-				return true
+				if hasChanged {
+					return true
+				}
+			} else {
+
+				findCurrentHostIndex := findInSlice(len(ipv6NeighborInfo), func(i int) bool {
+					return ipv6NeighborInfo[i].Mac == config.Ddns[i].Mac
+				})
+
+				if findCurrentHostIndex != -1 {
+					hasChanged := findInSlice(len(oldData.Ddns), func(j int) bool {
+						return oldData.Ddns[j].Host == config.Ddns[i].Host && oldData.Ddns[j].IP != ipv6NeighborInfo[findCurrentHostIndex].Addr
+					}) != -1
+
+					if hasChanged {
+						return true
+					}
+				}
+
 			}
 
 			return false
-
 		})
 
-		// 如果能找到一个一样的，则数据没有变化，直接退出
+		// 只要有一个不一样，则
 		if findIndex != -1 {
 			return true
 		}
@@ -237,6 +257,38 @@ func task() {
 
 	fmt.Printf("%v", config)
 
+	hosts := config.GetConfigAllHost()
+
+	// 读取本地ip
+	ips, err := services.GetCurrentIPs()
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	// 读取邻居ip
+	ipv6NeighborList, err := services.GetIpv6NeighborList()
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println(ipv6NeighborList)
+
+	// 先判断当前dns是否已经发生变化，发生变化再继续往下执行替换
+	oldData, err := readTempFile()
+
+	if err != nil {
+		fmt.Println("读取临时文件出错")
+		return
+	}
+
+	// 如果临时文件，没有数据记录，则直接往下执行，有数据则对比 clouflare 的数据
+	hasChanged := hasChangedRecordInTempFile(oldData, config, ips, ipv6NeighborList)
+	if !hasChanged {
+		return
+	}
+
 	zoneList, err := api.GetZoneRecord(config)
 
 	if err != nil {
@@ -269,38 +321,6 @@ func task() {
 	if err != nil {
 		fmt.Println(err)
 
-		return
-	}
-
-	hosts := config.GetConfigAllHost()
-
-	// 读取本地ip
-	ips, err := services.GetCurrentIPs()
-
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	// 读取邻居ip
-	ipv6NeighborList, err := services.GetIpv6NeighborList()
-
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	fmt.Println(ipv6NeighborList)
-
-	// 先判断当前dns是否已经发生变化，发生变化再继续往下执行替换
-	oldData, err := readTempFile()
-
-	if err != nil {
-		fmt.Println("读取临时文件出错")
-		return
-	}
-
-	// 如果临时文件，没有数据记录，则直接往下执行，有数据则对比 clouflare 的数据
-	hasSame := hasSameRecordInTempFile(oldData, recordlist)
-	if hasSame {
 		return
 	}
 
